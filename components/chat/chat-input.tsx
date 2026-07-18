@@ -1,10 +1,13 @@
+import { useState } from "react";
 type ChatInputProps = {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  disabled?: boolean;
 };
 
-export default function ChatInput({ value, onChange, onSend }: ChatInputProps) {
+export default function ChatInput({ value, onChange, onSend, disabled = false }: ChatInputProps) {
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   return (
     <div className="rounded-[1.25rem] border border-slate-200 bg-white p-3 shadow-sm">
       <textarea
@@ -13,14 +16,35 @@ export default function ChatInput({ value, onChange, onSend }: ChatInputProps) {
         rows={3}
         placeholder="Ask PlumbBud about a fault, regulation or manual..."
         className="w-full resize-none border-0 bg-transparent p-2 text-sm text-slate-700 outline-none"
+        disabled={disabled}
       />
-      <div className="mt-2 flex items-center justify-between">
-        <p className="text-xs text-slate-500">No AI connection yet — placeholder responses only.</p>
+        {selectedImage && (
+  <p className="mb-2 text-sm text-green-600">
+    📎 {selectedImage.name}
+  </p>
+)}
+        <div className="mt-2 flex items-center justify-between gap-4">
+        <p className="text-xs text-slate-500">Responses are generated server-side and the API key stays private.</p>
+        <label className="cursor-pointer rounded-full border border-slate-300 px-4 py-2 text-sm hover:bg-slate-100">
+  📷 Attach
+  <input
+    type="file"
+    accept="image/jpeg,image/png,image/webp"
+    className="hidden"
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        setSelectedImage(file);
+      }
+    }}
+  />
+</label>
         <button
           onClick={onSend}
-          className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+          disabled={disabled}
+          className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          Send
+          {disabled ? "Thinking..." : "Send"}
         </button>
       </div>
     </div>
