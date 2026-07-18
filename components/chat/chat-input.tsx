@@ -8,6 +8,7 @@ type ChatInputProps = {
 
 export default function ChatInput({ value, onChange, onSend, disabled = false }: ChatInputProps) {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   return (
     <div className="rounded-[1.25rem] border border-slate-200 bg-white p-3 shadow-sm">
       <textarea
@@ -18,10 +19,18 @@ export default function ChatInput({ value, onChange, onSend, disabled = false }:
         className="w-full resize-none border-0 bg-transparent p-2 text-sm text-slate-700 outline-none"
         disabled={disabled}
       />
-        {selectedImage && (
-  <p className="mb-2 text-sm text-green-600">
-    📎 {selectedImage.name}
-  </p>
+      {selectedImage && imagePreview && (
+  <div className="mb-3">
+    <img
+      src={imagePreview}
+      alt="Selected upload"
+      className="h-24 w-24 rounded-lg border border-slate-200 object-cover"
+    />
+
+    <p className="mt-1 text-sm text-green-600">
+      📎 {selectedImage.name}
+    </p>
+  </div>
 )}
         <div className="mt-2 flex items-center justify-between gap-4">
         <p className="text-xs text-slate-500">Responses are generated server-side and the API key stays private.</p>
@@ -32,11 +41,13 @@ export default function ChatInput({ value, onChange, onSend, disabled = false }:
     accept="image/jpeg,image/png,image/webp"
     className="hidden"
     onChange={(e) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        setSelectedImage(file);
-      }
-    }}
+  const file = e.target.files?.[0];
+
+  if (file) {
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+}}
   />
 </label>
         <button
