@@ -246,7 +246,7 @@ export default function ChatPage() {
     }
   }
 
-  const handleSend = async () => {
+  const handleSend = async (image: File | null) => {
     if (!draft.trim() || isSending) return;
 
     const trimmedDraft = draft.trim();
