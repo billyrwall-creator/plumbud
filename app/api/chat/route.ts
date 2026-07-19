@@ -3,20 +3,50 @@ import { sendChatMessage } from "@/services/chat-service";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const message = typeof body?.message === "string" ? body.message : "";
+    const formData = await request.formData();
+
+    const messageEntry = formData.get("message");
+    const chatIdEntry = formData.get("chatId");
+    const imageEntry = formData.get("image");
+
+    const message =
+      typeof messageEntry === "string" ? messageEntry : "";
+
+    const chatId =
+      typeof chatIdEntry === "string" ? chatIdEntry : null;
+
+    const image =
+      imageEntry instanceof File ? imageEntry : null;
 
     if (!message.trim()) {
-      return NextResponse.json({ error: "A message is required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "A message is required." },
+        { status: 400 }
+      );
     }
 
-    const userId = typeof body?.userId === "string" ? body.userId : null;
-    const chatId = typeof body?.chatId === "string" ? body.chatId : null;
-    const result = await sendChatMessage(message, userId, chatId);
+    const userId = null;
+
+    console.log(
+      "Image received by API:",
+      image ? image.name : "No image"
+    );
+
+    const result = await sendChatMessage(
+  message,
+  userId,
+  chatId,
+  image
+);
 
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const message =
+      error instanceof Error ? error.message : "Unknown error";
+
+    return NextResponse.json(
+      { error: message },
+      { status: 500 }
+    );
   }
 }

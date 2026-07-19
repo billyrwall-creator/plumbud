@@ -250,6 +250,7 @@ export default function ChatPage() {
     if (!draft.trim() || isSending) return;
 
     const trimmedDraft = draft.trim();
+    console.log("Selected image:", image);
     const userMessage: Message = {
       id: createMessageId(),
       role: "user",
@@ -261,11 +262,22 @@ export default function ChatPage() {
     setIsSending(true);
 
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmedDraft, chatId: activeChatId ?? undefined }),
-      });
+      const formData = new FormData();
+
+formData.append("message", trimmedDraft);
+
+if (activeChatId) {
+  formData.append("chatId", activeChatId);
+}
+
+if (image) {
+  formData.append("image", image);
+}
+
+const response = await fetch("/api/chat", {
+  method: "POST",
+  body: formData,
+});
 
       const payload = await response.json();
 

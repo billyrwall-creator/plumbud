@@ -15,11 +15,39 @@ export function buildChatTitle(input: string) {
   return cleaned.length > 60 ? `${cleaned.slice(0, 57)}...` : cleaned;
 }
 
-export async function sendChatMessage(input: string, userId?: string | null, chatId?: string | null) {
+export async function sendChatMessage(
+  input: string,
+  userId?: string | null,
+  chatId?: string | null,
+  image?: File | null
+) {
   if (!GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not configured.");
   }
+const parts: Array<
+  | { text: string }
+  | {
+      inline_data: {
+        mime_type: string;
+        data: string;
+      };
+    }
+> = [
+  {
+    text: `${GEMINI_SYSTEM_INSTRUCTIONS}\n\nUser question:\n${input}`,
+  },
+];
 
+if (image) {
+  const imageBuffer = Buffer.from(await image.arrayBuffer());
+
+  parts.push({
+    inline_data: {
+      mime_type: image.type,
+      data: imageBuffer.toString("base64"),
+    },
+  });
+}
   const response = await fetch(GEMINI_API_URL, {
     method: "POST",
     headers: {
@@ -30,7 +58,7 @@ export async function sendChatMessage(input: string, userId?: string | null, cha
       contents: [
         {
           role: "user",
-          parts: [{ text: `${GEMINI_SYSTEM_INSTRUCTIONS}\n\nUser question:\n${input}` }],
+          parts,
         },
       ],
     }),
