@@ -5,6 +5,7 @@ import type { Components } from "react-markdown";
 type MessageBubbleProps = {
   role: "user" | "assistant";
   content: string;
+  imageUrl?: string;
 };
 
 const markdownComponents: Components = {
@@ -51,7 +52,11 @@ const markdownComponents: Components = {
   ),
 };
 
-export default function MessageBubble({ role, content }: MessageBubbleProps) {
+export default function MessageBubble({
+  role,
+  content,
+  imageUrl,
+}: MessageBubbleProps) {
   const isUser = role === "user";
 
   return (
@@ -64,8 +69,18 @@ export default function MessageBubble({ role, content }: MessageBubbleProps) {
         }`}
       >
         {isUser ? (
-          <div className="whitespace-pre-wrap">{content}</div>
-        ) : (
+  <div className="space-y-3">
+    {imageUrl && (
+      <img
+        src={imageUrl}
+        alt="Uploaded image"
+        className="max-h-64 w-full rounded-xl object-cover"
+      />
+    )}
+
+    <div className="whitespace-pre-wrap">{content}</div>
+  </div>
+) : (
           <div className="space-y-1">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
               {content}

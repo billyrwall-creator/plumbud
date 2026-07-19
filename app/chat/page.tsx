@@ -10,6 +10,7 @@ type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  imageUrl?: string;
 };
 
 type ChatRecord = {
@@ -138,19 +139,17 @@ export default function ChatPage() {
         return;
       }
 
-      const nextChatId = activeChatId && chatList.some((chat) => chat.id === activeChatId)
-        ? activeChatId
-        : chatList[0].id;
+      const nextChatId = chatList[0].id;
 
-      setActiveChatId(nextChatId);
-      await loadMessages(nextChatId);
+setActiveChatId(nextChatId);
+await loadMessages(nextChatId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to load chat history right now.";
       setSidebarError(message);
     } finally {
       setLoadingChats(false);
     }
-  }, [activeChatId, loadMessages]);
+  }, [loadMessages]);
 
   useEffect(() => {
     let isMounted = true;
@@ -252,10 +251,11 @@ export default function ChatPage() {
     const trimmedDraft = draft.trim();
     console.log("Selected image:", image);
     const userMessage: Message = {
-      id: createMessageId(),
-      role: "user",
-      content: trimmedDraft,
-    };
+  id: createMessageId(),
+  role: "user",
+  content: trimmedDraft,
+  imageUrl: image ? URL.createObjectURL(image) : undefined,
+};
 
     setMessages((prev) => [...prev, userMessage]);
     setDraft("");
@@ -324,8 +324,8 @@ const response = await fetch("/api/chat", {
 
   return (
     <main className="flex-1 bg-slate-50 px-3 py-4 sm:px-6 lg:px-8 lg:py-8">
-      <div className="mx-auto flex h-[80vh] max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:flex-row">
-        <div className="w-full lg:w-72 lg:flex-none">
+      <div className="mx-auto flex h-[125vh] max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:flex-row">
+        <div className="w-full lg:w-64 lg:flex-none">
           <ChatSidebar
             chats={chats}
             activeChatId={activeChatId}
@@ -340,7 +340,7 @@ const response = await fetch("/api/chat", {
 
         <section className="flex flex-1 flex-col">
           <div className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6">
-            <div className="mx-auto flex max-w-3xl flex-col gap-4">
+            <div className="mx-auto flex max-w-5xl flex-col gap-4">
               {loadingMessages ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Loading conversation…</div>
               ) : messages.length === 0 ? (
@@ -351,8 +351,15 @@ const response = await fetch("/api/chat", {
                     Create a new chat or open an existing one to continue troubleshooting with PlumbBud.
                   </p>
                 </div>
-              ) : (
-                messages.map((message) => <MessageBubble key={message.id} role={message.role} content={message.content} />)
+                           ) : (
+                messages.map((message) => (
+                  <MessageBubble
+                    key={message.id}
+                    role={message.role}
+                    content={message.content}
+                    imageUrl={message.imageUrl}
+                  />
+                ))
               )}
               <div ref={endRef} />
             </div>
