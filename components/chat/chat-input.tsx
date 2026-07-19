@@ -21,7 +21,7 @@ export default function ChatInput({ value, onChange, onSend, disabled = false }:
         className="w-full resize-none border-0 bg-transparent p-2 text-sm text-slate-700 outline-none"
         disabled={disabled}
       />
-      {selectedImage && imagePreview && (
+     {selectedImage && imagePreview && (
   <div className="mb-3">
     <img
       src={imagePreview}
@@ -29,9 +29,23 @@ export default function ChatInput({ value, onChange, onSend, disabled = false }:
       className="h-24 w-24 rounded-lg border border-slate-200 object-cover"
     />
 
-    <p className="mt-1 text-sm text-green-600">
-      📎 {selectedImage.name}
-    </p>
+    <div className="mt-2 flex items-center gap-3">
+      <p className="text-sm text-green-600">
+        📎 {selectedImage.name}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => {
+          URL.revokeObjectURL(imagePreview);
+          setSelectedImage(null);
+          setImagePreview(null);
+        }}
+        className="text-sm font-medium text-red-600 hover:underline"
+      >
+        ❌ Remove
+      </button>
+    </div>
   </div>
 )}
         <div className="mt-2 flex items-center justify-between gap-4">
