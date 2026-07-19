@@ -247,7 +247,7 @@ export default function ChatPage() {
   }
 
   const handleSend = async (image: File | null) => {
-    if (!draft.trim() || isSending) return;
+    if (!draft.trim() || isSending) return false;
 
     const trimmedDraft = draft.trim();
     console.log("Selected image:", image);
@@ -308,6 +308,7 @@ const response = await fetch("/api/chat", {
           setChats((prev) => prev.map((chat) => (chat.id === nextChatId ? { ...chat, title: chat.title || createShortTitle(trimmedDraft) } : chat)));
         }
       }
+      return true;
     } catch (error) {
       const assistantMessage: Message = {
         id: createMessageId(),
@@ -315,6 +316,7 @@ const response = await fetch("/api/chat", {
         content: error instanceof Error ? error.message : "Unable to generate a response right now.",
       };
       setMessages((prev) => [...prev, assistantMessage]);
+      return false;
     } finally {
       setIsSending(false);
     }

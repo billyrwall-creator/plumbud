@@ -4,7 +4,7 @@ import { useState } from "react";
 type ChatInputProps = {
   value: string;
   onChange: (value: string) => void;
-  onSend: (image: File | null) => void;
+  onSend: (image: File | null) => Promise<boolean>;
   disabled?: boolean;
 };
 
@@ -67,7 +67,18 @@ export default function ChatInput({ value, onChange, onSend, disabled = false }:
   />
 </label>
         <button
-          onClick={() => onSend(selectedImage)}
+          onClick={async () => {
+  const sentSuccessfully = await onSend(selectedImage);
+
+  if (sentSuccessfully) {
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setSelectedImage(null);
+    setImagePreview(null);
+  }
+}}
           disabled={disabled}
           className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
