@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { GEMINI_SYSTEM_INSTRUCTIONS } from "@/lib/gemini/config";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent";
+const GEMINI_API_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent";
 
 export function buildChatTitle(input: string) {
   const cleaned = input.trim().replace(/\s+/g, " ");
@@ -48,33 +49,43 @@ if (image) {
     },
   });
 }
-  const response = await fetch(GEMINI_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": GEMINI_API_KEY,
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts,
-        },
-      ],
-    }),
-  });
-
+const conversationHistory = await loadConversationHistory(chatId);
+ const response = await fetch(GEMINI_API_URL, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-goog-api-key": GEMINI_API_KEY,
+  },
+  body: JSON.stringify({
+    contents: [
+      ...conversationHistory,
+      {
+        role: "user",
+        parts,
+      },
+    ],
+  }),
+});
   if (!response.ok) {
     const errorText = await response.text();
 
     if (response.status === 429) {
-      throw new Error("The Gemini service is currently rate-limited. Please wait a moment and try again.");
-    }
-
+  throw new Error(
+    "The Gemini API quota has been reached. Please wait for the quota to reset or check your Google AI billing and usage limits."
+  );
+}
+if (response.status === 503) {
+  throw new Error(
+    "Gemini is currently experiencing high demand. Please wait a moment and try again."
+  );
+}
     throw new Error(`Gemini request failed: ${response.status} ${errorText}`);
   }
 
-  const payload = await response.json();
+ const responseText = await response.text();
+console.log("Gemini raw response:", responseText);
+
+const payload = responseText ? JSON.parse(responseText) : {};
   const assistantText = payload?.candidates?.[0]?.content?.parts?.[0]?.text ?? "I could not generate a response.";
   const persistedChat = await persistConversation(userId, input, assistantText, chatId);
 
@@ -83,6 +94,48 @@ if (image) {
     chatId: persistedChat.chatId,
     title: persistedChat.title,
   };
+}
+async function loadConversationHistory(chatId?: string | null) {
+  if (!chatId) {
+    return [];
+  }
+  const cookieStore = await cookies();
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  const { data: messages, error } = await supabase
+    .from("messages")
+    .select("role, content")
+    .eq("chat_id", chatId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Unable to load chat history: ${error.message}`);
+  }
+
+  return (messages ?? []).map((message) => ({
+    role: message.role === "assistant" ? "model" : "user",
+    parts: [
+      {
+        text: message.content,
+      },
+    ],
+  }));
 }
 
 async function persistConversation(userId: string | null | undefined, userMessage: string, assistantMessage: string, chatId?: string | null) {

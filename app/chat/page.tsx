@@ -262,7 +262,34 @@ await loadMessages(nextChatId);
     setIsSending(true);
 
     try {
-      const formData = new FormData();
+  let uploadedImageUrl: string | undefined;
+
+  if (image) {
+    const supabase = createClient();
+
+    if (!supabase) {
+      throw new Error("Supabase is not configured.");
+    }
+
+    const fileExtension = image.name.split(".").pop() || "jpg";
+    const filePath = `${crypto.randomUUID()}.${fileExtension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("chat-images")
+      .upload(filePath, image);
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("chat-images").getPublicUrl(filePath);
+
+    uploadedImageUrl = publicUrl;
+  }
+
+  const formData = new FormData();
 
 formData.append("message", trimmedDraft);
 
