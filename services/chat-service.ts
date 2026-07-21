@@ -5,7 +5,28 @@ import { GEMINI_SYSTEM_INSTRUCTIONS } from "@/lib/gemini/config";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent";
+async function fetchGeminiWithRetry(
+  url: string,
+  options: RequestInit,
+  maxAttempts = 3
+) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(url, options);
 
+    if (response.status !== 503) {
+      return response;
+    }
+
+    if (attempt < maxAttempts) {
+      const waitTime = attempt * 2000;
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    } else {
+      return response;
+    }
+  }
+
+  throw new Error("Unexpected retry failure.");
+}
 export function buildChatTitle(input: string) {
   const cleaned = input.trim().replace(/\s+/g, " ");
 
@@ -16,11 +37,12 @@ export function buildChatTitle(input: string) {
   return cleaned.length > 60 ? `${cleaned.slice(0, 57)}...` : cleaned;
 }
 
-export async function sendChatMessage(
-  input: string,
-  userId?: string | null,
-  chatId?: string | null,
-  image?: File | null
+  export async function sendChatMessage(
+  userMessage: string,
+  userId: string | null,
+  chatId: string | null,
+  image: File | null,
+  imageUrl: string | null
 ) {
   if (!GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not configured.");
@@ -67,6 +89,8 @@ const conversationHistory = await loadConversationHistory(chatId);
   }),
 });
   if (!response.ok) {
+    console.log("Gemini status:", response.status);
+    
     const errorText = await response.text();
 
     if (response.status === 429) {
@@ -200,10 +224,11 @@ async function persistConversation(userId: string | null | undefined, userMessag
   }
 
   const { error: userMessageError } = await supabase.from("messages").insert({
-    chat_id: resolvedChatId,
-    role: "user",
-    content: userMessage,
-  });
+  chat_id: resolvedChatId,
+  role: "user",
+  content: userMessage,
+  image_url: imageUrl,
+});
 
   if (userMessageError) {
     throw new Error(`Unable to save user message: ${userMessageError.message}`);

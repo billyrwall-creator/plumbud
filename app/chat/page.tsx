@@ -59,7 +59,7 @@ export default function ChatPage() {
     try {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, role, content, created_at")
+        .select("id, role, content, image_url, created_at")
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
 
@@ -68,10 +68,11 @@ export default function ChatPage() {
       }
 
       const nextMessages = (data ?? []).map((message) => ({
-        id: message.id,
-        role: message.role as Message["role"],
-        content: message.content,
-      })) as Message[];
+  id: message.id,
+  role: message.role as Message["role"],
+  content: message.content,
+  imageUrl: message.image_url ?? undefined,
+})) as Message[];
 
       setMessages(nextMessages);
     } catch (error) {
@@ -300,17 +301,24 @@ if (activeChatId) {
 if (image) {
   formData.append("image", image);
 }
+if (uploadedImageUrl) {
+  formData.append("imageUrl", uploadedImageUrl);
+}
 
 const response = await fetch("/api/chat", {
   method: "POST",
   body: formData,
 });
 
-      const payload = await response.json();
+      const responseText = await response.text();
 
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to contact the AI service.");
-      }
+console.log("API response:", responseText);
+
+const payload = responseText ? JSON.parse(responseText) : {};
+
+if (!response.ok) {
+  throw new Error(payload.error || "Unable to contact the AI service.");
+}
 
       const assistantMessage: Message = {
         id: createMessageId(),

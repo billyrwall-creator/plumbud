@@ -8,6 +8,7 @@ export async function POST(request: NextRequest) {
     const messageEntry = formData.get("message");
     const chatIdEntry = formData.get("chatId");
     const imageEntry = formData.get("image");
+    const imageUrlEntry = formData.get("imageUrl");
 
     const message =
       typeof messageEntry === "string" ? messageEntry : "";
@@ -17,6 +18,8 @@ export async function POST(request: NextRequest) {
 
     const image =
       imageEntry instanceof File ? imageEntry : null;
+      const imageUrl =
+  typeof imageUrlEntry === "string" ? imageUrlEntry : null;
 
     if (!message.trim()) {
       return NextResponse.json(
@@ -32,11 +35,12 @@ export async function POST(request: NextRequest) {
       image ? image.name : "No image"
     );
 
-    const result = await sendChatMessage(
+   const result = await sendChatMessage(
   message,
   userId,
   chatId,
-  image
+  image,
+  imageUrl
 );
 
     return NextResponse.json(result);
