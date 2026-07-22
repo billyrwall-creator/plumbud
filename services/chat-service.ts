@@ -1,11 +1,47 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { GEMINI_SYSTEM_INSTRUCTIONS } from "@/lib/gemini/config";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent";
-async function fetchGeminiWithRetry(
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
+const GEMINI_EMBEDDING_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
+
+async function createEmbedding(text: string): Promise<number[]> {
+  const response = await fetch(GEMINI_EMBEDDING_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_API_KEY!,
+    },
+    body: JSON.stringify({
+      model: "models/gemini-embedding-001",
+      content: {
+        parts: [{ text }],
+      },
+      outputDimensionality: 768,
+    }),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result?.error?.message || "Failed to create question embedding."
+    );
+  }
+
+  const embedding = result.embedding?.values;
+
+  if (!Array.isArray(embedding)) {
+    throw new Error("Gemini did not return a question embedding.");
+  }
+
+  return embedding;
+}
+  async function fetchGeminiWithRetry(
   url: string,
   options: RequestInit,
   maxAttempts = 3
@@ -13,16 +49,17 @@ async function fetchGeminiWithRetry(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const response = await fetch(url, options);
 
-    if (response.status !== 503) {
-      return response;
+    if (response.status === 503) {
+      if (attempt < maxAttempts) {
+        const waitTime = attempt * 2000;
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+        continue;
+      } else {
+        return response;
+      }
     }
 
-    if (attempt < maxAttempts) {
-      const waitTime = attempt * 2000;
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    } else {
-      return response;
-    }
+    return response;
   }
 
   throw new Error("Unexpected retry failure.");
@@ -42,11 +79,32 @@ export function buildChatTitle(input: string) {
   userId: string | null,
   chatId: string | null,
   image: File | null,
-  imageUrl: string | null
+  imageUrl: string | null,
 ) {
-  if (!GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not configured.");
-  }
+ if (!GEMINI_API_KEY) {
+  throw new Error("GEMINI_API_KEY is not configured.");
+}
+const questionEmbedding = await createEmbedding(userMessage);
+
+const { data: knowledgeMatches, error: knowledgeError } =
+  await supabaseAdmin.rpc("match_knowledge", {
+    query_embedding: questionEmbedding,
+    match_count: 3,
+  });
+
+if (knowledgeError) {
+  console.error("Knowledge search error:", knowledgeError.message);
+}
+
+const knowledgeContext = Array.isArray(knowledgeMatches)
+  ? knowledgeMatches
+      .map(
+        (match: { title?: string; content?: string }) =>
+          `${match.title ?? "Knowledge source"}:\n${match.content ?? ""}`
+      )
+      .join("\n\n")
+  : "";
+  
 const parts: Array<
   | { text: string }
   | {
@@ -57,8 +115,16 @@ const parts: Array<
     }
 > = [
   {
-    text: `${GEMINI_SYSTEM_INSTRUCTIONS}\n\nUser question:\n${input}`,
-  },
+  text: `
+${GEMINI_SYSTEM_INSTRUCTIONS}
+
+Relevant plumbing knowledge:
+${knowledgeContext || "No relevant knowledge found."}
+
+User question:
+${userMessage}
+`,
+},
 ];
 
 if (image) {
@@ -72,7 +138,8 @@ if (image) {
   });
 }
 const conversationHistory = await loadConversationHistory(chatId);
- const response = await fetch(GEMINI_API_URL, {
+
+const response = await fetchGeminiWithRetry(GEMINI_API_URL, {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -88,30 +155,45 @@ const conversationHistory = await loadConversationHistory(chatId);
     ],
   }),
 });
-  if (!response.ok) {
-    console.log("Gemini status:", response.status);
-    
-    const errorText = await response.text();
 
-    if (response.status === 429) {
-  throw new Error(
-    "The Gemini API quota has been reached. Please wait for the quota to reset or check your Google AI billing and usage limits."
-  );
-}
-if (response.status === 503) {
-  throw new Error(
-    "Gemini is currently experiencing high demand. Please wait a moment and try again."
-  );
-}
-    throw new Error(`Gemini request failed: ${response.status} ${errorText}`);
+if (!response.ok) {
+  console.log("Gemini status:", response.status);
+
+  const errorText = await response.text();
+
+  if (response.status === 429) {
+    throw new Error(
+      "The Gemini API quota has been reached. Please wait for the quota to reset or check your Google AI billing and usage limits."
+    );
   }
 
- const responseText = await response.text();
+  if (response.status === 503) {
+  console.error("Gemini 503 response:", errorText);
+
+  throw new Error(
+    `Gemini 503: ${errorText}`
+  );
+}
+
+  throw new Error(`Gemini request failed: ${response.status} ${errorText}`);
+}
+
+const responseText = await response.text();
 console.log("Gemini raw response:", responseText);
 
 const payload = responseText ? JSON.parse(responseText) : {};
-  const assistantText = payload?.candidates?.[0]?.content?.parts?.[0]?.text ?? "I could not generate a response.";
-  const persistedChat = await persistConversation(userId, input, assistantText, chatId);
+
+const assistantText =
+  payload?.candidates?.[0]?.content?.parts?.[0]?.text ??
+  "I could not generate a response.";
+  
+ const persistedChat = await persistConversation(
+  userId,
+  userMessage,
+  assistantText,
+  chatId,
+  imageUrl
+);
 
   return {
     reply: assistantText,
@@ -152,17 +234,23 @@ async function loadConversationHistory(chatId?: string | null) {
     throw new Error(`Unable to load chat history: ${error.message}`);
   }
 
-  return (messages ?? []).map((message) => ({
-    role: message.role === "assistant" ? "model" : "user",
-    parts: [
-      {
-        text: message.content,
-      },
-    ],
-  }));
+return (messages ?? []).map((message) => ({
+  role: message.role === "assistant" ? "model" : "user",
+  parts: [
+    {
+      text: message.content,
+    },
+  ],
+}));
 }
 
-async function persistConversation(userId: string | null | undefined, userMessage: string, assistantMessage: string, chatId?: string | null) {
+async function persistConversation(
+  userId: string | null,
+  userMessage: string,
+  assistantMessage: string,
+  chatId: string | null,
+  imageUrl: string | null
+) {
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
